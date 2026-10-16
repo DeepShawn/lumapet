@@ -31,6 +31,7 @@
 4. **借鉴 Live2DPet 的模型导入**：允许用户选择 Live2D 目录或图片文件夹，扫描模型文件、表情和动作；缺少 Live2D 时使用 Q 版/成年版图片状态机，保证 Web 和 Android 可用。
 5. **借鉴鲸鱼娘插件的“工作态安静”**：把 `thinking/tool/stream/error/success/idle` 做成明确状态，工作时不弹闲聊；动作采用“一个表情层 + 一个动作层 + 到期回收”的调度器，避免动作叠加导致模型卡死。
 6. **素材合规**：仅把上述仓库的代码实现思路带入 lumapet；不要直接打包 `dsh-whale-girl-live2d`、`deepseek-whalechan` 或 Open-LLM-VTuber 的模型/图片。鲸鱼娘、Claude 娘、GPT 娘的最终模型应使用用户自有、明确授权或新生成且可商业使用的素材，README 中分别记录作者、来源和许可。
+7. **代理部署边界**：服务端代理若绑定 `0.0.0.0`，必须在反向代理或服务端加认证、速率限制和请求体限制；仅依赖 `Access-Control-Allow-Origin` 不能防止 API key 被滥用。默认保持回环地址，远程访问时使用 HTTPS 和单独的代理 token。
 
 ## 下载状态
 
