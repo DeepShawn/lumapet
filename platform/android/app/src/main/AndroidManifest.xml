@@ -9,6 +9,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <service android:name=".PetOverlayService" android:exported="false" android:foregroundServiceType="specialUse" />
+        <service android:name=".PetOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
+            <!-- Android 14+ requires a declared subtype for special-use foreground services. -->
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="persistent desktop pet overlay" />
+        </service>
     </application>
 </manifest>

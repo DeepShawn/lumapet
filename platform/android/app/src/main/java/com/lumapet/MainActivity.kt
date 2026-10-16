@@ -33,6 +33,15 @@ class MainActivity : AppCompatActivity() {
         startForegroundService(Intent(this, PetOverlayService::class.java))
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Returning from the system overlay-permission screen does not recreate the
+        // activity. Start the service here so the first grant takes effect immediately.
+        if (Settings.canDrawOverlays(this)) {
+            startForegroundService(Intent(this, PetOverlayService::class.java))
+        }
+    }
+
     override fun onDestroy() {
         // The service intentionally stays alive so the pet remains visible after the app is closed.
         super.onDestroy()

@@ -9,6 +9,7 @@ LumaPet 是一个面向 Web、Windows 和 Android 的 AI 桌宠第一版。它�
 - **Android**：原生 WebView + 悬浮服务骨架，获得悬浮窗权限后，应用退到后台仍保留桌宠入口。
 - **模型**：Cloud GPT 与 DeepSeek，均支持 OpenAI 兼容的 `chat/completions` 接口。
 - **API 代理**：内置无依赖 Node 服务，可把 API Key 放在服务器环境变量里，设备只收到模型回复。
+- **Live2D 插槽**：可在参考图面板导入本地 `.model3.json` / `.model.json` 清单，记录动作、表情和许可证元数据；不会自动上传或内置来源不明的模型。
 - **OpenClaw 预留**：读取剪贴板摘要、25 分钟专注计时、桌宠唤醒；窗口捕捉、系统级工具菜单留给后续版本。
 
 ## 本地运行
@@ -35,7 +36,9 @@ LUMAPET_DEEPSEEK_API_KEY=你的密钥 \\
 npm start
 ```
 
-服务端会在 `http://127.0.0.1:8787` 提供静态站点、`/api/health` 和 `/api/chat`。在右上角模型设置中选择“LumaPet 服务端代理”即可；代理模式不会把服务器密钥下发到浏览器。部署到其他主机时设置 `HOST=0.0.0.0` 和 `LUMAPET_ALLOWED_ORIGIN`。
+服务端会在 `http://127.0.0.1:8787` 提供静态站点、`/api/health` 和 `/api/chat`。在右上角模型设置中选择“LumaPet 服务端代理”即可；代理模式不会把服务器密钥下发到浏览器。部署到其他主机时必须同时设置 `HOST=0.0.0.0`、`LUMAPET_ALLOWED_ORIGIN` 和 `LUMAPET_PROXY_TOKEN`，再把同一个令牌填入应用的“代理访问令牌”字段；服务端拒绝没有令牌的远程绑定，避免意外变成开放代理。
+
+变量模板见 [.env.example](.env.example)。
 
 ## 配置模型
 
@@ -80,6 +83,8 @@ src/                         Web/PWA 核心
 public/references/            用户提供的参考图
 platform/windows/             Electron 浮窗壳
 platform/android/             Android WebView 与悬浮服务骨架
+docs/research.md              开源桌宠与 Live2D 调研摘要
+docs/live2d-model-package.md  本地模型包约定
 ```
 
 ## 素材与安全

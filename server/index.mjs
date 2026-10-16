@@ -8,6 +8,13 @@ const dist = join(root, 'dist');
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
 const allowedOrigin = process.env.LUMAPET_ALLOWED_ORIGIN || '*';
+const proxyToken = process.env.LUMAPET_PROXY_TOKEN || '';
+const isLocalHost = host === '127.0.0.1' || host === 'localhost' || host === '::1';
+
+if (!isLocalHost && !proxyToken) {
+  console.error('Refusing remote bind without LUMAPET_PROXY_TOKEN. Set a token or keep HOST=127.0.0.1.');
+  process.exit(1);
+}
 
 const providers = {
   cloudgpt: {
@@ -26,7 +33,7 @@ const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-LumaPet-Proxy-Token');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
@@ -49,6 +56,7 @@ async function body(req) {
 
 async function proxyChat(req, res) {
   try {
+    if (proxyToken && req.headers['x-lumapet-proxy-token'] !== proxyToken) return json(res, 401, { error: { message: '代理访问令牌无效' } });
     const payload = await body(req);
     const providerId = payload.provider === 'deepseek' ? 'deepseek' : 'cloudgpt';
     const provider = providers[providerId];

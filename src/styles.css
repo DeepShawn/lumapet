@@ -61,3 +61,5 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .chat-head { gap: 10px; }
 .clear-chat { align-self: flex-end; margin-left: auto; margin-bottom: 4px; border: 0; color: var(--muted); background: transparent; font-size: 10px; }
 .clear-chat:hover { color: var(--accent); }
+.live2d-slot { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; margin-top: 18px; padding: 13px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.live2d-slot b, .live2d-slot small { display: block; }.live2d-slot b { margin-top: 5px; color: var(--soft); font-size: 11px; }.live2d-slot small { max-width: 350px; margin-top: 4px; color: var(--muted); font-size: 9px; line-height: 1.5; }.live2d-slot .upload-button { white-space: nowrap; }.live2d-slot .text-button { grid-column: 1 / -1; margin-top: 0; }.license-note { margin: 11px 0 0; color: #9e98b5; font-size: 9px; line-height: 1.6; }
