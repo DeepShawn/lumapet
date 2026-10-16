@@ -41,9 +41,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android 35 SDK components
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
       # There is no Gradle wrapper in this first release. Pin the toolchain in
       # CI until one is committed, so AGP 8.5.2 always uses Gradle 8.7.
