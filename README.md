@@ -8,6 +8,7 @@ LumaPet 是一个面向 Web、Windows 和 Android 的 AI 桌宠第一版。它�
 - **Windows**：Electron 浮窗壳，默认置顶，关闭窗口后收进托盘。
 - **Android**：原生 WebView + 悬浮服务骨架，获得悬浮窗权限后，应用退到后台仍保留桌宠入口。
 - **模型**：Cloud GPT 与 DeepSeek，均支持 OpenAI 兼容的 `chat/completions` 接口。
+- **API 代理**：内置无依赖 Node 服务，可把 API Key 放在服务器环境变量里，设备只收到模型回复。
 - **OpenClaw 预留**：读取剪贴板摘要、25 分钟专注计时、桌宠唤醒；窗口捕捉、系统级工具菜单留给后续版本。
 
 ## 本地运行
@@ -26,9 +27,19 @@ npm run build
 npm run preview
 ```
 
+如果需要为多台设备提供统一的 API 代理：
+
+```bash
+LUMAPET_CLOUDGPT_API_KEY=你的密钥 \\
+LUMAPET_DEEPSEEK_API_KEY=你的密钥 \\
+npm start
+```
+
+服务端会在 `http://127.0.0.1:8787` 提供静态站点、`/api/health` 和 `/api/chat`。在右上角模型设置中选择“LumaPet 服务端代理”即可；代理模式不会把服务器密钥下发到浏览器。部署到其他主机时设置 `HOST=0.0.0.0` 和 `LUMAPET_ALLOWED_ORIGIN`。
+
 ## 配置模型
 
-点击右上角设置，选择 Cloud GPT 或 DeepSeek，填写模型名、兼容接口地址和 API Key。Key 只写入当前设备的 `localStorage`，前端直接请求你填写的接口；仓库没有服务端，也不会把 Key 写入源码或构建产物。没有 Key 时会自动使用本地演示回复。
+点击右上角设置，选择 Cloud GPT 或 DeepSeek，填写模型名、兼容接口地址和 API Key。设备直连模式会把 Key 写入当前设备的 `localStorage`，前端直接请求你填写的接口；没有 Key 时会自动使用本地演示回复。需要集中管理密钥时切换到服务端代理模式，并在 Node 服务环境变量中配置 Key。
 
 默认值：
 
@@ -57,6 +68,10 @@ LUMAPET_DEV_URL=http://localhost:5173 npm run desktop
 ## Android 悬浮桌宠
 
 先运行 `npm run build`，将 `dist/` 复制到 `platform/android/app/src/main/assets/public/`，再用 Android Studio 打开 `platform/android`。首次启动会申请悬浮窗权限并启动前台服务；服务保持运行时，返回桌面或关闭 Activity 仍会显示悬浮入口。原生壳说明和后续扩展点见 [platform/android/README.md](platform/android/README.md)。
+
+## 配置迁移
+
+设置弹窗支持导出和导入外观、角色和接口地址。导出文件会主动排除 API Key；导入时会保留当前设备已经保存的 Key。
 
 ## 目录
 

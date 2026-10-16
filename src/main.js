@@ -8,6 +8,7 @@ const PROVIDERS = {
     color: '#a78bfa',
     model: 'gpt-4o-mini',
     endpoint: 'https://api.openai.com/v1/chat/completions',
+    transport: 'direct',
     description: '适合通用对话、写作与多模态工作流'
   },
   deepseek: {
@@ -17,6 +18,7 @@ const PROVIDERS = {
     color: '#55a8ff',
     model: 'deepseek-chat',
     endpoint: 'https://api.deepseek.com/chat/completions',
+    transport: 'direct',
     description: '适合中文对话、推理与代码助手'
   }
 };
@@ -103,6 +105,7 @@ const state = {
 };
 
 const app = document.querySelector('#app');
+let swRegistered = false;
 
 function esc(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -154,6 +157,48 @@ function persistSettings() {
 
 function persistMessages() {
   safeWrite(STORAGE.messages, state.messages.slice(-30));
+}
+
+function clearChat() {
+  state.messages = [{ role: 'assistant', content: `聊天已清空。${currentPreset().name} 随时可以重新开始。`, meta: '新的开始' }];
+  persistMessages();
+  render();
+  toast('对话已清空');
+}
+
+function exportSettings() {
+  const safeConfigs = Object.fromEntries(Object.entries(savedConfigs).map(([id, config]) => [id, { model: config.model, endpoint: config.endpoint, transport: config.transport || 'direct' }]));
+  const payload = { version: 1, exportedAt: new Date().toISOString(), settings: { provider: state.provider, petMode: state.petMode, preset: state.preset, background: state.background, customBackground: state.customBackground, accent: state.accent, size: state.size, bubble: state.bubble, motion: state.motion }, providerConfigs: safeConfigs };
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  link.download = `lumapet-config-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast('外观与接口配置已导出', 'success');
+}
+
+function importSettings(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const payload = JSON.parse(reader.result);
+      const incoming = payload.settings || {};
+      ['provider', 'petMode', 'preset', 'background', 'customBackground', 'accent', 'size', 'bubble', 'motion'].forEach((key) => {
+        if (incoming[key] !== undefined) state[key] = incoming[key];
+      });
+      Object.entries(payload.providerConfigs || {}).forEach(([id, config]) => {
+        if (!PROVIDERS[id]) return;
+        savedConfigs[id] = { ...(savedConfigs[id] || {}), model: config.model || PROVIDERS[id].model, endpoint: config.endpoint || PROVIDERS[id].endpoint, transport: config.transport === 'proxy' ? 'proxy' : 'direct' };
+      });
+      safeWrite(STORAGE.providerConfigs, savedConfigs);
+      persistSettings();
+      closeModal();
+      render();
+      toast('配置已导入（API Key 保留本机原值）', 'success');
+    } catch { toast('配置文件格式不正确', 'error'); }
+  };
+  reader.readAsText(file);
 }
 
 function formatTime(ms) {
@@ -240,6 +285,7 @@ function render() {
         <section class="chat-column">
           <div class="chat-head">
             <div><span class="section-kicker">对话中</span><h2>和你的 AI 说点什么</h2></div>
+            <button class="clear-chat" data-action="clear-chat">清空</button>
             <div class="provider-picker"><span class="provider-dot" style="background:${esc(provider.color)}"></span><select id="provider-select">${Object.values(PROVIDERS).map((item) => `<option value="${item.id}" ${item.id === state.provider ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select><button data-action="open-settings" title="配置当前模型">⌄</button></div>
           </div>
           <div class="chat-meta"><span><i class="status-dot"></i>${state.isThinking ? '模型正在回复' : '已连接 · 本地优先'}</span><span>${esc(provider.model)}</span></div>
@@ -274,7 +320,7 @@ function render() {
             <div class="setting-row toggle-row"><div><b>轻微呼吸动画</b><small>低功耗模式可关闭</small></div><button class="toggle ${state.motion ? 'on' : ''}" data-toggle="motion"><i></i></button></div>
           </div>
 
-          <div class="control-card api-card"><div class="api-icon">${esc(provider.shortName)}</div><div><b>${esc(provider.name)} 已就绪</b><small>${savedConfigs[state.provider]?.apiKey ? 'API Key 已保存在本机' : '演示模式 · 点击配置 API Key'}</small></div><button data-action="open-settings">配置</button></div>
+          <div class="control-card api-card"><div class="api-icon">${esc(provider.shortName)}</div><div><b>${esc(provider.name)} 已就绪</b><small>${provider.transport === 'proxy' ? '服务端代理 · Key 不下发到设备' : savedConfigs[state.provider]?.apiKey ? 'API Key 已保存在本机' : '演示模式 · 点击配置 API Key'}</small></div><button data-action="open-settings">配置</button></div>
         </aside>
       </main>
 
@@ -286,10 +332,11 @@ function render() {
       <p class="modal-lead">密钥只会保存在当前设备的本地存储中，并直接从应用请求模型服务。仓库里不会写入任何密钥。</p>
       <form id="settings-form" class="settings-form">
         <label>模型提供方<select id="settings-provider">${Object.values(PROVIDERS).map((item) => `<option value="${item.id}" ${item.id === state.provider ? 'selected' : ''}>${esc(item.name)} · ${esc(item.description)}</option>`).join('')}</select></label>
-        <div class="form-grid"><label>模型名称<input id="settings-model" value="${esc(provider.model)}" autocomplete="off" /></label><label>API Key<input id="settings-key" type="password" placeholder="sk-…" value="${esc(savedConfigs[state.provider]?.apiKey || '')}" autocomplete="new-password" /></label></div>
+        <div class="form-grid"><label>模型名称<input id="settings-model" value="${esc(provider.model)}" autocomplete="off" /></label><label>API Key<input id="settings-key" type="password" placeholder="sk-…（代理模式可留空）" value="${esc(savedConfigs[state.provider]?.apiKey || '')}" autocomplete="new-password" /></label></div>
+        <label>请求方式<select id="settings-transport"><option value="direct" ${provider.transport !== 'proxy' ? 'selected' : ''}>设备直连 · Key 保存在本机</option><option value="proxy" ${provider.transport === 'proxy' ? 'selected' : ''}>LumaPet 服务端代理 · 使用服务器环境变量</option></select></label>
         <label>兼容接口地址<input id="settings-endpoint" value="${esc(provider.endpoint)}" autocomplete="url" /></label>
         <div class="modal-tip"><span>✦</span><p>如果你的服务是 OpenAI 兼容接口，可以直接替换地址与模型名。没有填写 Key 时，LumaPet 会使用本地演示回复。</p></div>
-        <div class="modal-actions"><button type="button" class="secondary-button" data-action="close-modal">取消</button><button class="primary-button" type="submit">保存连接</button></div>
+        <div class="modal-actions"><button type="button" class="secondary-button" data-action="export-settings">导出外观配置</button><button type="button" class="secondary-button" data-action="import-settings">导入配置</button><button type="button" class="secondary-button" data-action="close-modal">取消</button><button class="primary-button" type="submit">保存连接</button></div><input id="config-upload" type="file" accept="application/json" hidden />
       </form>
     </section>
     <section class="modal reference-modal" id="reference-modal" hidden role="dialog" aria-modal="true" aria-labelledby="reference-title">
@@ -298,13 +345,16 @@ function render() {
       <div class="reference-gallery"><span class="eyebrow">内置参考</span><div class="gallery-grid"><button data-reference="gpt"><img src="/references/gpt-reference.jpg" alt="GPT 娘参考" /><span>GPT 娘</span></button><button data-reference="deepseek"><img src="/references/deepseek-reference.jpg" alt="DeepSeek 娘参考" /><span>DeepSeek 娘</span></button><button data-reference="intro"><img src="/references/intro.jpg" alt="灵感板" /><span>灵感板</span></button></div></div>
     </section>
     <section class="modal small-modal" id="info-modal" hidden role="dialog" aria-modal="true"><div class="modal-head"><div><span class="eyebrow">OPENCLAW READY</span><h3>快捷能力接口</h3></div><button class="close-button" data-action="close-modal">×</button></div><p class="modal-lead">第一版先提供剪贴板摘要、专注计时、桌宠唤醒等本地动作；Windows 的悬浮窗和 Android 的悬浮服务已经预留入口，后续可以继续挂接 OpenClaw 的工具链。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">知道了</button></div></section>
-    <section class="modal small-modal" id="privacy-modal" hidden role="dialog" aria-modal="true"><div class="modal-head"><div><span class="eyebrow">LOCAL FIRST</span><h3>隐私说明</h3></div><button class="close-button" data-action="close-modal">×</button></div><p class="modal-lead">LumaPet 的第一版不带自建服务器。聊天内容、外观设置和 API Key 默认保留在当前设备；只有点击发送时，消息才会直接发往你选择的模型接口。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">关闭</button></div></section>
+    <section class="modal small-modal" id="privacy-modal" hidden role="dialog" aria-modal="true"><div class="modal-head"><div><span class="eyebrow">LOCAL FIRST</span><h3>隐私说明</h3></div><button class="close-button" data-action="close-modal">×</button></div><p class="modal-lead">默认模式下聊天内容、外观设置和 API Key 保留在当前设备，并直接发往你选择的模型接口。你也可以启用 LumaPet 服务端代理，让 API Key 只存在服务器环境变量中；代理不会把 Key 下发到设备。</p><div class="modal-actions"><button class="primary-button" data-action="close-modal">关闭</button></div></section>
     <div id="toast" class="toast" role="status"></div>
   `;
 
   bindEvents();
   const list = document.querySelector('#message-list');
   if (list) list.scrollTop = list.scrollHeight;
+  if (!swRegistered && 'serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(() => { swRegistered = true; }).catch(() => {});
+  }
 }
 
 function openModal(id) {
@@ -408,7 +458,8 @@ async function sendChat(fromClipboard = false) {
   render();
   const config = providerConfig();
   const key = savedConfigs[state.provider]?.apiKey?.trim();
-  if (!key) {
+  const useProxy = config.transport === 'proxy';
+  if (!useProxy && !key) {
     await new Promise((resolve) => window.setTimeout(resolve, fromClipboard ? 480 : 720));
     state.messages.push({ role: 'assistant', content: demoReply(input) });
     state.isThinking = false;
@@ -419,17 +470,19 @@ async function sendChat(fromClipboard = false) {
   try {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 30000);
-    const response = await fetch(config.endpoint, {
+    const requestBody = {
+      model: config.model,
+      messages: [
+        { role: 'system', content: `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。` },
+        ...state.messages.slice(-12).map(({ role, content }) => ({ role, content }))
+      ],
+      temperature: 0.7
+    };
+    if (useProxy) requestBody.provider = state.provider;
+    const response = await fetch(useProxy ? '/api/chat' : config.endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          { role: 'system', content: `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。` },
-          ...state.messages.slice(-12).map(({ role, content }) => ({ role, content }))
-        ],
-        temperature: 0.7
-      }),
+      headers: { 'Content-Type': 'application/json', ...(useProxy ? {} : { 'Authorization': `Bearer ${key}` }) },
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     });
     window.clearTimeout(timeout);
@@ -459,6 +512,9 @@ function bindEvents() {
     if (action === 'open-claw-info') openModal('info-modal');
     if (action === 'open-privacy') openModal('privacy-modal');
     if (action === 'close-modal') closeModal();
+    if (action === 'clear-chat') clearChat();
+    if (action === 'export-settings') exportSettings();
+    if (action === 'import-settings') document.querySelector('#config-upload')?.click();
     if (action === 'pet-speak') petSpeak();
     if (action === 'focus') startFocus();
     if (action === 'clipboard') await readClipboard();
@@ -476,11 +532,12 @@ function bindEvents() {
     document.querySelector('#settings-model').value = config.model;
     document.querySelector('#settings-endpoint').value = config.endpoint;
     document.querySelector('#settings-key').value = savedConfigs[event.target.value]?.apiKey || '';
+    document.querySelector('#settings-transport').value = config.transport || 'direct';
   });
   document.querySelector('#settings-form')?.addEventListener('submit', (event) => {
     event.preventDefault();
     const id = document.querySelector('#settings-provider').value;
-    savedConfigs[id] = { model: document.querySelector('#settings-model').value.trim() || PROVIDERS[id].model, endpoint: document.querySelector('#settings-endpoint').value.trim() || PROVIDERS[id].endpoint, apiKey: document.querySelector('#settings-key').value.trim() };
+    savedConfigs[id] = { model: document.querySelector('#settings-model').value.trim() || PROVIDERS[id].model, endpoint: document.querySelector('#settings-endpoint').value.trim() || PROVIDERS[id].endpoint, transport: document.querySelector('#settings-transport').value, apiKey: document.querySelector('#settings-key').value.trim() };
     safeWrite(STORAGE.providerConfigs, savedConfigs);
     state.provider = id;
     persistSettings();
@@ -488,12 +545,28 @@ function bindEvents() {
     render();
     toast(`${PROVIDERS[id].name} 连接已保存`, 'success');
   });
+  document.querySelector('#config-upload')?.addEventListener('change', (event) => importSettings(event.target.files?.[0]));
   document.querySelector('#reference-upload')?.addEventListener('change', (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) return toast('图片请控制在 8MB 以内', 'error');
     const reader = new FileReader();
-    reader.onload = () => { state.customImage = reader.result; persistSettings(); render(); openModal('reference-modal'); toast('参考图已载入'); };
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 1400 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+        state.customImage = canvas.toDataURL('image/webp', 0.82);
+        persistSettings();
+        render();
+        openModal('reference-modal');
+        toast('参考图已载入');
+      };
+      image.src = reader.result;
+    };
     reader.readAsDataURL(file);
   });
   document.querySelectorAll('[data-reference]').forEach((button) => button.addEventListener('click', () => { if (PRESETS[button.dataset.reference]) { state.preset = button.dataset.reference; state.customImage = ''; persistSettings(); render(); openModal('reference-modal'); } }));

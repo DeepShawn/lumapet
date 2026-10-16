@@ -57,3 +57,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 1120px) { .workspace { grid-template-columns: minmax(280px, .9fr) minmax(350px, 1.1fr); }.control-column { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1fr; }.api-card { align-self: start; } }
 @media (max-width: 780px) { .topbar { grid-template-columns: 1fr auto; padding: 0 17px; }.topbar-center { display: none; }.workspace { display: flex; flex-direction: column; padding: 16px 13px 80px; }.pet-stage { height: min(112vw, 420px); }.chat-column { min-height: 600px; }.control-column { display: flex; }.statusbar { padding: 11px 16px; }.statusbar > span:last-child { display: none; }.pet-portrait { width: 190px; height: 260px; }.reference-strip { padding-left: 11px; }.reference-copy small { max-width: 170px; }.form-grid { grid-template-columns: 1fr; gap: 13px; }.reference-preview { grid-template-columns: 120px 1fr; }.large-reference { height: 145px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+
+.chat-head { gap: 10px; }
+.clear-chat { align-self: flex-end; margin-left: auto; margin-bottom: 4px; border: 0; color: var(--muted); background: transparent; font-size: 10px; }
+.clear-chat:hover { color: var(--accent); }

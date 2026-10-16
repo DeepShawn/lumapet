@@ -9,6 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "android:sync": "npm run build && node scripts/sync-android.mjs",
+    "server": "node server/index.mjs",
+    "start": "npm run build && node server/index.mjs",
     "desktop": "electron platform/windows/main.cjs",
     "desktop:install": "npm install --save-dev electron",
     "desktop:pack": "electron-builder --dir"
