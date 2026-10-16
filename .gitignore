@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+scratch/
+platform/windows/release/
+platform/android/.gradle/
+platform/android/local.properties
+platform/android/app/build/
+platform/android/build/

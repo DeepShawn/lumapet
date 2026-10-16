@@ -1,0 +1,19 @@
+{
+  "name": "lumapet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LumaPet — a cross-platform AI desktop companion for Cloud GPT and DeepSeek.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "android:sync": "npm run build && node scripts/sync-android.mjs",
+    "desktop": "electron platform/windows/main.cjs",
+    "desktop:install": "npm install --save-dev electron",
+    "desktop:pack": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "vite": "^6.1.0"
+  }
+}

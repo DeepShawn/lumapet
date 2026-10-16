@@ -1,0 +1,14 @@
+{
+  "name": "lumapet-windows",
+  "private": true,
+  "version": "0.1.0",
+  "main": "main.cjs",
+  "description": "LumaPet Windows floating companion shell",
+  "build": {
+    "appId": "ai.lumapet.desktop",
+    "productName": "LumaPet",
+    "directories": { "output": "release" },
+    "files": ["../../dist/**/*", "*.cjs", "tray-template.png"],
+    "win": { "target": ["nsis", "portable"] }
+  }
+}
