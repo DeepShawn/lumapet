@@ -1,0 +1,21 @@
+appId: ai.lumapet.desktop
+productName: LumaPet
+asar: true
+directories:
+  output: platform/windows/release
+files:
+  - dist/**
+  - platform/windows/main.cjs
+  - platform/windows/preload.cjs
+  - platform/windows/tray-template.png
+win:
+  target:
+    - nsis
+    - portable
+  artifactName: LumaPet-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+portable:
+  artifactName: LumaPet-${version}-${arch}-portable.${ext}

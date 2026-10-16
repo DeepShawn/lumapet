@@ -1,4 +1,8 @@
 import './styles.css';
+import { LiveCanvasPet } from './livecanvas.js';
+
+const APP_BASE = import.meta.env.BASE_URL || '/';
+const asset = (path) => `${APP_BASE}${String(path).replace(/^\/+/, '')}`;
 
 const PROVIDERS = {
   cloudgpt: {
@@ -27,8 +31,8 @@ const PRESETS = {
   gpt: {
     name: 'GPT 娘',
     eyebrow: 'Cloud GPT',
-    adult: '/references/gpt-reference.jpg',
-    child: '/references/gpt-reference.jpg',
+    adult: asset('references/gpt-reference.jpg'),
+    child: asset('references/gpt-reference.jpg'),
     objectAdult: '20% 50%',
     objectChild: '80% 50%',
     emoji: '✦',
@@ -37,8 +41,8 @@ const PRESETS = {
   deepseek: {
     name: 'DeepSeek 娘',
     eyebrow: 'DeepSeek',
-    adult: '/references/deepseek-reference.jpg',
-    child: '/references/deepseek-reference.jpg',
+    adult: asset('references/deepseek-reference.jpg'),
+    child: asset('references/deepseek-reference.jpg'),
     objectAdult: '20% 50%',
     objectChild: '80% 50%',
     emoji: '◈',
@@ -85,6 +89,7 @@ const url = new URL(window.location.href);
 
 const state = {
   platform: url.searchParams.get('platform') || 'web',
+  overlay: url.searchParams.get('overlay') === '1',
   provider: savedSettings.provider || 'cloudgpt',
   petMode: savedSettings.petMode || 'chibi',
   preset: savedSettings.preset || 'gpt',
@@ -92,6 +97,16 @@ const state = {
   customBackground: savedSettings.customBackground || '',
   accent: savedSettings.accent || '#a78bfa',
   proxyToken: typeof savedSettings.proxyToken === 'string' ? savedSettings.proxyToken : '',
+  agentUrl: typeof savedSettings.agentUrl === 'string' ? savedSettings.agentUrl : 'http://127.0.0.1:8788',
+  agentToken: typeof savedSettings.agentToken === 'string' ? savedSettings.agentToken : '',
+  agentConnected: false,
+  agentCapabilities: [],
+  agentPending: null,
+  agentResult: '',
+  emotion: (() => {
+    const value = savedSettings.emotion;
+    return value && typeof value === 'object' ? { mood: String(value.mood || '平静'), energy: Math.min(100, Math.max(0, Number(value.energy) || 72)), affection: Math.min(100, Math.max(0, Number(value.affection) || 0)) } : { mood: '平静', energy: 72, affection: 0 };
+  })(),
   size: Number(savedSettings.size || 1),
   bubble: savedSettings.bubble !== false,
   motion: savedSettings.motion !== false,
@@ -114,6 +129,7 @@ const app = document.querySelector('#app');
 let swRegistered = false;
 let modalReturnFocus = null;
 let documentEventsBound = false;
+let liveCanvasPet = null;
 
 const isProvider = (value) => Object.prototype.hasOwnProperty.call(PROVIDERS, value);
 const isPreset = (value) => Object.prototype.hasOwnProperty.call(PRESETS, value);
@@ -177,10 +193,13 @@ function persistSettings() {
     customBackground: state.customBackground,
     accent: state.accent,
     proxyToken: state.proxyToken,
+    agentUrl: state.agentUrl,
+    agentToken: state.agentToken,
     size: state.size,
     bubble: state.bubble,
     motion: state.motion,
     quietMode: state.quietMode,
+    emotion: state.emotion,
     customImage: state.customImage
   });
 }
@@ -191,6 +210,75 @@ function persistMessages() {
 
 function persistLive2D() {
   safeWrite(STORAGE.live2dModel, state.live2dModel);
+}
+
+async function agentRequest(path, options = {}) {
+  const response = await fetch(`${state.agentUrl.replace(/\/$/, '')}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(state.agentToken ? { 'X-LumaPet-Agent-Token': state.agentToken } : {}), ...(options.headers || {}) }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok && response.status !== 202) throw new Error(data?.error?.message || `代理 HTTP ${response.status}`);
+  return { response, data };
+}
+
+async function checkAgent() {
+  try {
+    const { data } = await agentRequest('/v1/capabilities');
+    state.agentConnected = true;
+    state.agentCapabilities = data.capabilities || [];
+    state.agentResult = `已连接：${state.agentCapabilities.length} 项本机能力可用`;
+    persistSettings();
+  } catch (error) {
+    state.agentConnected = false;
+    state.agentResult = `连接失败：${error.message}`;
+  }
+  render();
+  openModal('agent-modal');
+}
+
+async function runAgentAction(kind) {
+  const target = document.querySelector('#agent-target')?.value.trim();
+  const selector = document.querySelector('#agent-selector')?.value.trim();
+  const text = document.querySelector('#agent-text')?.value || '';
+  const map = {
+    navigate: ['browser.navigate', { url: target }, '打开网页'],
+    read: ['browser.read', {}, '读取当前网页'],
+    screenshot: ['browser.screenshot', {}, '截取当前网页'],
+    click: ['browser.click', { selector }, '点击网页元素'],
+    type: ['browser.type', { selector, text }, '填写网页输入框'],
+    openUrl: ['system.open_url', { url: target }, '用系统浏览器打开链接'],
+    clipboard: ['clipboard.read', {}, '读取剪贴板'],
+    activeWindow: ['system.active_window', {}, '读取当前窗口'],
+    openApp: ['system.open_app', { app: target }, '打开安全白名单应用']
+  };
+  const [action, args, summary] = map[kind] || [];
+  if (!action) return;
+  try {
+    const { response, data } = await agentRequest('/v1/tasks', { method: 'POST', body: JSON.stringify({ action, args, summary }) });
+    state.agentConnected = true;
+    if (response.status === 202 || data.requiresApproval) {
+      state.agentPending = data.task;
+      state.agentResult = `等待确认：${data.task.summary}`;
+    } else {
+      state.agentResult = JSON.stringify(data.task?.result ?? data, null, 2);
+    }
+  } catch (error) {
+    state.agentResult = `任务失败：${error.message}`;
+  }
+  render();
+  openModal('agent-modal');
+}
+
+async function approveAgentTask() {
+  if (!state.agentPending?.id) return;
+  try {
+    const { data } = await agentRequest(`/v1/tasks/${state.agentPending.id}/approve`, { method: 'POST', body: '{}' });
+    state.agentResult = JSON.stringify(data.task?.result ?? data, null, 2);
+    state.agentPending = null;
+  } catch (error) { state.agentResult = `批准执行失败：${error.message}`; }
+  render();
+  openModal('agent-modal');
 }
 
 function readLive2DManifest(files) {
@@ -253,9 +341,25 @@ function clearChat() {
   toast('对话已清空');
 }
 
+function setEmotion(mood, message = '') {
+  state.emotion.mood = mood;
+  state.emotion.energy = Math.min(100, Math.max(0, state.emotion.energy + (mood === '开心' ? 4 : mood === '担心' ? -2 : 1)));
+  state.emotion.affection = Math.min(100, state.emotion.affection + 2);
+  state.petMood = mood === '开心' ? '开心' : state.petMood;
+  persistSettings();
+  render();
+  if (message) toast(message, 'success');
+}
+
+function inferEmotion(text) {
+  if (/(开心|哈哈|谢谢|太棒|喜欢|爱你|成功)/.test(text)) setEmotion('开心');
+  else if (/(难过|焦虑|崩溃|失败|烦|累|担心)/.test(text)) setEmotion('担心');
+  else if (/(生气|愤怒|气死)/.test(text)) setEmotion('警觉');
+}
+
 function exportSettings() {
   const safeConfigs = Object.fromEntries(Object.entries(savedConfigs).map(([id, config]) => [id, { model: config.model, endpoint: config.endpoint, transport: config.transport || 'direct' }]));
-  const payload = { version: 1, exportedAt: new Date().toISOString(), settings: { provider: state.provider, petMode: state.petMode, preset: state.preset, background: state.background, customBackground: state.customBackground, accent: state.accent, size: state.size, bubble: state.bubble, motion: state.motion, quietMode: state.quietMode }, providerConfigs: safeConfigs, live2dModel: state.live2dModel };
+  const payload = { version: 1, exportedAt: new Date().toISOString(), settings: { provider: state.provider, petMode: state.petMode, preset: state.preset, background: state.background, customBackground: state.customBackground, accent: state.accent, size: state.size, bubble: state.bubble, motion: state.motion, quietMode: state.quietMode, emotion: state.emotion }, providerConfigs: safeConfigs, live2dModel: state.live2dModel };
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
   link.download = `lumapet-config-${new Date().toISOString().slice(0, 10)}.json`;
@@ -281,6 +385,7 @@ function importSettings(file) {
       if (typeof incoming.bubble === 'boolean') state.bubble = incoming.bubble;
       if (typeof incoming.motion === 'boolean') state.motion = incoming.motion;
       if (typeof incoming.quietMode === 'boolean') state.quietMode = incoming.quietMode;
+      if (incoming.emotion && typeof incoming.emotion === 'object') state.emotion = { mood: String(incoming.emotion.mood || '平静'), energy: Math.min(100, Math.max(0, Number(incoming.emotion.energy) || 72)), affection: Math.min(100, Math.max(0, Number(incoming.emotion.affection) || 0)) };
       if (payload.live2dModel && typeof payload.live2dModel === 'object' && typeof payload.live2dModel.entry === 'string') state.live2dModel = payload.live2dModel;
       Object.entries(payload.providerConfigs || {}).forEach(([id, config]) => {
         if (!PROVIDERS[id] || !config || typeof config !== 'object') return;
@@ -313,6 +418,8 @@ function toast(message, tone = 'normal') {
 }
 
 function render() {
+  if (state.overlay) return renderOverlay();
+  document.body.classList.remove('overlay-mode');
   const provider = providerConfig();
   const preset = currentPreset();
   const bg = state.background === 'custom' && state.customBackground
@@ -355,8 +462,8 @@ function render() {
               <div class="spark spark-a">✦</div><div class="spark spark-b">✧</div><div class="spark spark-c">·</div>
               ${state.bubble && !state.quietMode ? `<div class="pet-bubble"><span>${state.isThinking ? '正在思考…' : state.petMood === '开心' ? '收到啦！' : '今天也要发光'}</span><i></i></div>` : ''}
               <button type="button" class="pet-portrait ${state.motion ? 'float' : ''}" data-action="pet-speak" aria-label="点击 ${esc(preset.name)}">
-                <img src="${esc(imageForPet())}" alt="${esc(preset.name)} 参考形象" style="${esc(petImageStyle())}" />
-                <span class="pet-glass"></span>
+                <canvas id="pet-canvas" aria-label="${esc(preset.name)} 动态桌宠"></canvas>
+                <span class="pet-glass"></span><span class="pet-live-badge">LIVE 2D STYLE</span>
               </button>
               <div class="pet-nameplate"><span class="pet-orb">${esc(preset.emoji)}</span><span><b>${esc(preset.name)}</b><small>${state.petMode === 'adult' ? '成年形态' : 'Q版形态'} · ${esc(preset.line)}</small></span></div>
             </div>
@@ -406,6 +513,12 @@ function render() {
             </div>
           </div>
 
+          <div class="control-card agent-card">
+            <div class="card-title"><span>本机任务代理</span><span class="agent-pill ${state.agentConnected ? 'connected' : ''}"><i></i>${state.agentConnected ? '已连接' : '未连接'}</span></div>
+            <p class="card-subtitle">像 N.E.K.O. 一样帮你打开网页、读取页面和执行小任务；写操作会先等待确认。</p>
+            <div class="agent-card-actions"><button type="button" data-action="open-agent">管理代理</button><button type="button" data-agent-action="read">读取当前页</button></div>
+          </div>
+
           <div class="control-card">
             <div class="card-title"><span>外观与场景</span><button type="button" class="more-button" data-action="open-reference">编辑</button></div>
             <div class="setting-row"><div><b>背景氛围</b><small>为每个平台单独保存</small></div><div class="swatches">${Object.keys(BACKGROUNDS).map((id) => `<button type="button" class="swatch ${state.background === id ? 'selected' : ''} ${id}" data-background="${id}" title="${id === 'aurora' ? '极光' : id === 'night' ? '深夜' : id === 'paper' ? '纸张' : '自定义'}" aria-label="切换到${id === 'aurora' ? '极光' : id === 'night' ? '深夜' : id === 'paper' ? '纸张' : '自定义'}背景" aria-pressed="${state.background === id}"></button>`).join('')}</div></div>
@@ -416,6 +529,7 @@ function render() {
             <div class="setting-row toggle-row"><div><b>专注勿扰</b><small>工作时隐藏主动气泡</small></div><button type="button" class="toggle ${state.quietMode ? 'on' : ''}" data-toggle="quietMode" role="switch" aria-checked="${state.quietMode}" aria-label="专注勿扰"><i></i></button></div>
           </div>
 
+          <div class="control-card emotion-card"><div class="card-title"><span>情绪交流</span><span class="emotion-mood">${esc(state.emotion.mood)}</span></div><div class="emotion-meter"><i style="width:${state.emotion.energy}%"></i></div><small>能量 ${Math.round(state.emotion.energy)} · 亲密度 ${Math.round(state.emotion.affection)}</small><div class="emotion-actions"><button type="button" data-emotion="开心">夸夸我</button><button type="button" data-emotion="平静">安静陪伴</button><button type="button" data-emotion="担心">我有点累</button></div></div>
           <div class="control-card api-card"><div class="api-icon">${esc(provider.shortName)}</div><div><b>${esc(provider.name)} 已就绪</b><small>${provider.transport === 'proxy' ? '服务端代理 · Key 不下发到设备' : savedConfigs[state.provider]?.apiKey ? 'API Key 已保存在本机' : '演示模式 · 点击配置 API Key'}</small></div><button type="button" data-action="open-settings">配置</button></div>
         </aside>
       </main>
@@ -439,9 +553,18 @@ function render() {
     <section class="modal reference-modal" id="reference-modal" hidden role="dialog" aria-modal="true" aria-labelledby="reference-title">
       <div class="modal-head"><div><span class="eyebrow">REFERENCE STUDIO</span><h3 id="reference-title">角色参考与外观</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
       <div class="reference-preview"><div class="large-reference"><img id="reference-preview-image" src="${esc(state.customImage || imageForPet())}" alt="参考图预览" /></div><div><b>${state.customImage ? '自定义参考图' : esc(preset.name)}</b><p>首版保留参考图，用于角色视觉锚定。后续可接入 Live2D、动作层与生成式换装。</p><label class="upload-button"><input id="reference-upload" type="file" accept="image/png,image/jpeg,image/webp" />上传一张参考图</label>${state.customImage ? '<button type="button" class="text-button" data-action="clear-reference">清除自定义图</button>' : ''}</div></div>
-      <div class="reference-gallery"><span class="eyebrow">内置参考</span><div class="gallery-grid"><button type="button" data-reference="gpt"><img src="/references/gpt-reference.jpg" alt="GPT 娘参考" /><span>GPT 娘</span></button><button type="button" data-reference="deepseek"><img src="/references/deepseek-reference.jpg" alt="DeepSeek 娘参考" /><span>DeepSeek 娘</span></button><button type="button" data-reference="intro"><img src="/references/intro.jpg" alt="灵感板" /><span>灵感板</span></button></div></div>
+      <div class="reference-gallery"><span class="eyebrow">内置参考</span><div class="gallery-grid"><button type="button" data-reference="gpt"><img src="${asset('references/gpt-reference.jpg')}" alt="GPT 娘参考" /><span>GPT 娘</span></button><button type="button" data-reference="deepseek"><img src="${asset('references/deepseek-reference.jpg')}" alt="DeepSeek 娘参考" /><span>DeepSeek 娘</span></button><button type="button" data-reference="intro"><img src="${asset('references/intro.jpg')}" alt="灵感板" /><span>灵感板</span></button></div></div>
       <div class="live2d-slot"><div><span class="eyebrow">LIVE2D SLOT · EXPERIMENTAL</span><b>${state.live2dModel ? `已载入 ${esc(state.live2dModel.name || '本地模型')}` : '导入本地 Live2D 模型包'}</b><small>${state.live2dModel ? `${esc(state.live2dModel.version || '3')} · ${state.live2dModel.textures || 0} 张纹理 · ${state.live2dModel.motions?.length || 0} 组动作 · ${state.live2dModel.expressions || 0} 个表情` : '选择 .model3.json / .model.json，可附带 manifest.json 与 LICENSE/NOTICE'}</small></div><label class="upload-button"><input id="live2d-upload" type="file" multiple accept=".json,.model3.json,.model.json,.moc3,.moc,.png,.jpg,.jpeg,.webp,.motion3.json,.exp3.json,LICENSE,NOTICE" />${state.live2dModel ? '重新载入' : '选择模型包'}</label>${state.live2dModel ? `<button type="button" class="text-button" data-action="clear-live2d">清除模型清单</button>` : ''}</div>
       <p class="license-note">模型文件只在本机选择，不会自动上传。缺少许可证时仅作为本地实验资源；鲸鱼娘仓库的模型是 CC BY-NC-SA 4.0，Claude 娘 / GPT 娘目前没有找到可确认可再分发的 Live2D 模型。</p>
+    </section>
+    <section class="modal agent-modal" id="agent-modal" hidden role="dialog" aria-modal="true" aria-labelledby="agent-title">
+      <div class="modal-head"><div><span class="eyebrow">LOCAL TASK BRIDGE</span><h3 id="agent-title">本机任务代理</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
+      <p class="modal-lead">代理只绑定本机，写操作（打开、点击、填写、写入剪贴板）会先进入待确认队列。它不会执行任意 shell、任意 JavaScript 或 file:// 地址。</p>
+      <div class="agent-connection"><label>代理地址<input id="agent-url" value="${esc(state.agentUrl)}" autocomplete="url" /></label><label>访问令牌<input id="agent-token" type="password" value="${esc(state.agentToken)}" autocomplete="off" placeholder="本机可留空" /></label><button type="button" class="primary-button" data-agent-action="connect">连接检测</button></div>
+      <div class="agent-fields"><label>目标网址<input id="agent-target" placeholder="https://example.com" autocomplete="url" /></label><label>CSS 选择器<input id="agent-selector" placeholder="#search 或 button.submit" autocomplete="off" /></label><label>填写文字<textarea id="agent-text" rows="2" placeholder="仅在填写网页时使用"></textarea></label></div>
+      <div class="agent-actions"><button type="button" class="secondary-button" data-agent-action="openUrl">系统浏览器打开</button><button type="button" class="secondary-button" data-agent-action="navigate">打开受控网页</button><button type="button" class="secondary-button" data-agent-action="read">读取网页</button><button type="button" class="secondary-button" data-agent-action="screenshot">网页截图</button><button type="button" class="secondary-button" data-agent-action="click">点击元素</button><button type="button" class="secondary-button" data-agent-action="type">填写输入框</button><button type="button" class="secondary-button" data-agent-action="clipboard">读取剪贴板</button><button type="button" class="secondary-button" data-agent-action="activeWindow">当前窗口</button><button type="button" class="secondary-button" data-agent-action="openApp">打开应用</button></div>
+      ${state.agentPending ? `<div class="agent-approval"><b>等待确认</b><span>${esc(state.agentPending.summary || state.agentPending.action)}</span><button type="button" class="primary-button" data-agent-action="approve">允许执行一次</button></div>` : ''}
+      <pre class="agent-result">${esc(state.agentResult || '连接后选择一个动作。')}</pre>
     </section>
     <section class="modal small-modal" id="info-modal" hidden role="dialog" aria-modal="true" aria-labelledby="info-title"><div class="modal-head"><div><span class="eyebrow">OPENCLAW READY</span><h3 id="info-title">快捷能力接口</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div><p class="modal-lead">第一版先提供剪贴板摘要、专注计时、桌宠唤醒等本地动作；Windows 的悬浮窗和 Android 的悬浮服务已经预留入口，后续可以继续挂接 OpenClaw 的工具链。</p><div class="modal-actions"><button type="button" class="primary-button" data-action="close-modal">知道了</button></div></section>
     <section class="modal small-modal" id="privacy-modal" hidden role="dialog" aria-modal="true" aria-labelledby="privacy-title"><div class="modal-head"><div><span class="eyebrow">LOCAL FIRST</span><h3 id="privacy-title">隐私说明</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div><p class="modal-lead">默认模式下聊天内容、外观设置和 API Key 保留在当前设备，并直接发往你选择的模型接口。你也可以启用 LumaPet 服务端代理，让 API Key 只存在服务器环境变量中；代理不会把 Key 下发到设备。</p><div class="modal-actions"><button type="button" class="primary-button" data-action="close-modal">关闭</button></div></section>
@@ -449,11 +572,35 @@ function render() {
   `;
 
   bindEvents();
+  mountLiveCanvas();
   const list = document.querySelector('#message-list');
   if (list) list.scrollTop = list.scrollHeight;
   if (!swRegistered && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').then(() => { swRegistered = true; }).catch(() => {});
+    navigator.serviceWorker.register(asset('sw.js')).then(() => { swRegistered = true; }).catch(() => {});
   }
+}
+
+function renderOverlay() {
+  document.body.classList.add('overlay-mode');
+  const preset = currentPreset();
+  app.innerHTML = `<div class="overlay-shell" style="--accent:${esc(state.accent)}"><div class="overlay-bubble ${state.quietMode ? 'hidden' : ''}">${state.isThinking ? '正在思考…' : state.petMood === '开心' ? '收到啦！' : '点击我聊天'}</div><button type="button" class="pet-portrait ${state.motion ? 'float' : ''}" data-action="pet-speak" aria-label="点击 ${esc(preset.name)}"><canvas id="pet-canvas" aria-label="${esc(preset.name)} 动态桌宠"></canvas><span class="pet-glass"></span><span class="pet-live-badge">LUMAPET</span></button><span class="overlay-caption">${esc(preset.name)} · ${state.petMode === 'adult' ? '成年版' : 'Q版'}</span></div><div id="toast" class="toast" role="status"></div>`;
+  bindEvents();
+  mountLiveCanvas();
+}
+
+function mountLiveCanvas() {
+  liveCanvasPet?.destroy();
+  const canvas = document.querySelector('#pet-canvas');
+  if (!canvas) return;
+  liveCanvasPet = new LiveCanvasPet(canvas, {
+    kind: state.preset,
+    mode: state.petMode,
+    accent: state.accent,
+    motion: state.motion,
+    state: state.isThinking ? 'thinking' : state.petMood === '开心' ? 'speaking' : 'idle',
+    mood: state.petMood
+  });
+  liveCanvasPet.start();
 }
 
 function openModal(id) {
@@ -585,7 +732,7 @@ async function sendChat(fromClipboard = false) {
     const requestBody = {
       model: config.model,
       messages: [
-        { role: 'system', content: `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。` },
+          { role: 'system', content: `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。当前情绪：${state.emotion.mood}，能量 ${Math.round(state.emotion.energy)}，亲密度 ${Math.round(state.emotion.affection)}。` },
         ...state.messages.slice(-12).map(({ role, content }) => ({ role, content }))
       ],
       temperature: 0.7
@@ -622,6 +769,7 @@ function bindEvents() {
     if (action === 'open-settings') openModal('settings-modal');
     if (action === 'open-reference') openModal('reference-modal');
     if (action === 'open-claw-info') openModal('info-modal');
+    if (action === 'open-agent') openModal('agent-modal');
     if (action === 'open-privacy') openModal('privacy-modal');
     if (action === 'close-modal') closeModal();
     if (action === 'clear-chat') clearChat();
@@ -638,7 +786,8 @@ function bindEvents() {
   document.querySelector('#provider-select')?.addEventListener('change', (event) => setProvider(event.target.value));
   document.querySelector('#size-range')?.addEventListener('input', (event) => { state.size = Number(event.target.value); persistSettings(); document.querySelector('.app-shell')?.style.setProperty('--pet-scale', state.size); document.querySelector('.pet-portrait')?.style.setProperty('transform', `scale(${state.size})`); });
   document.querySelector('#accent-input')?.addEventListener('input', (event) => { state.accent = event.target.value; persistSettings(); document.querySelector('.app-shell')?.style.setProperty('--accent', state.accent); });
-  document.querySelector('#chat-form')?.addEventListener('submit', async (event) => { event.preventDefault(); const input = document.querySelector('#chat-input'); const content = input.value.trim(); if (!content || state.isThinking) return; state.messages.push({ role: 'user', content }); input.value = ''; persistMessages(); await sendChat(); });
+  document.querySelector('#chat-form')?.addEventListener('submit', async (event) => { event.preventDefault(); const input = document.querySelector('#chat-input'); const content = input.value.trim(); if (!content || state.isThinking) return; inferEmotion(content); state.emotion.affection = Math.min(100, state.emotion.affection + 1); state.messages.push({ role: 'user', content }); input.value = ''; persistMessages(); await sendChat(); });
+  document.querySelectorAll('[data-emotion]').forEach((button) => button.addEventListener('click', () => setEmotion(button.dataset.emotion, button.dataset.emotion === '开心' ? '收到夸奖啦。' : button.dataset.emotion === '担心' ? '我会陪你把事情拆小。' : '那就先安静待一会儿。')));
   document.querySelector('#chat-input')?.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); document.querySelector('#chat-form')?.requestSubmit(); } });
   document.querySelector('#settings-provider')?.addEventListener('change', (event) => {
     const config = providerConfig(event.target.value);
@@ -660,6 +809,22 @@ function bindEvents() {
     toast(`${PROVIDERS[id].name} 连接已保存`, 'success');
   });
   document.querySelector('#config-upload')?.addEventListener('change', (event) => importSettings(event.target.files?.[0]));
+  document.querySelectorAll('[data-agent-action]').forEach((button) => button.addEventListener('click', async () => {
+    const action = button.dataset.agentAction;
+    if (action === 'connect') {
+      state.agentUrl = document.querySelector('#agent-url')?.value.trim() || state.agentUrl;
+      state.agentToken = document.querySelector('#agent-token')?.value.trim() || '';
+      await checkAgent();
+      return;
+    }
+    if (action === 'approve') { await approveAgentTask(); return; }
+    if (['navigate', 'read', 'screenshot', 'click', 'type', 'openUrl', 'clipboard', 'activeWindow', 'openApp'].includes(action)) {
+      state.agentUrl = document.querySelector('#agent-url')?.value.trim() || state.agentUrl;
+      state.agentToken = document.querySelector('#agent-token')?.value.trim() || state.agentToken;
+      persistSettings();
+      await runAgentAction(action);
+    }
+  }));
   document.querySelector('#live2d-upload')?.addEventListener('change', (event) => readLive2DManifest(event.target.files || []));
   document.querySelector('#reference-upload')?.addEventListener('change', (event) => {
     const file = event.target.files?.[0];
@@ -689,7 +854,7 @@ function bindEvents() {
       state.preset = button.dataset.reference;
       state.customImage = '';
     } else if (button.dataset.reference === 'intro') {
-      state.customImage = '/references/intro.jpg';
+      state.customImage = asset('references/intro.jpg');
     }
     persistSettings();
     render();

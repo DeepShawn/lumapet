@@ -15,7 +15,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: node --check src/main.js
       - run: node --check server/index.mjs
+      - run: node --check agent/server.mjs
       - run: npm run build
+      - run: npm run check

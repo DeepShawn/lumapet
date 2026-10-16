@@ -11,4 +11,5 @@ platform/windows/release/
 platform/android/.gradle/
 platform/android/local.properties
 platform/android/app/build/
+.lumapet-agent/
 platform/android/build/
