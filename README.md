@@ -78,6 +78,8 @@ LUMAPET_DEV_URL=http://localhost:5173 npm run desktop
 
 推送版本 tag 后，`.github/workflows/android-package.yml` 会构建 debug APK 并上传到 Actions artifact；推送 `main` 后，`.github/workflows/pages.yml` 会发布 Web 版到 GitHub Pages。
 
+Pages 预期地址为 `https://deepshawn.github.io/lumapet/`。第一次需要在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**；当前 PAT 没有修改 Pages 设置的权限，所以这一步需仓库所有者点一次。
+
 ## 配置迁移
 
 设置弹窗支持导出和导入外观、角色和接口地址。导出文件会主动排除 API Key；导入时会保留当前设备已经保存的 Key。
