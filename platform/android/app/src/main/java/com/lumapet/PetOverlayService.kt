@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
@@ -21,9 +22,38 @@ class PetOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
-        startForeground(1024, notification())
-        if (Settings.canDrawOverlays(this)) attachOverlay()
+        try {
+            createChannel()
+            if (!startForegroundSafely()) {
+                stopSelf()
+                return
+            }
+            if (Settings.canDrawOverlays(this)) attachOverlay()
+        } catch (_: SecurityException) {
+            // A denied special-use/notification permission must not crash the app.
+            stopSelf()
+        } catch (_: RuntimeException) {
+            stopSelf()
+        }
+    }
+
+    private fun startForegroundSafely(): Boolean {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    1024,
+                    notification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(1024, notification())
+            }
+            true
+        } catch (_: SecurityException) {
+            false
+        } catch (_: RuntimeException) {
+            false
+        }
     }
 
     private fun attachOverlay() {
@@ -41,7 +71,15 @@ class PetOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.END
             y = 180
         }
-        windowManager?.addView(overlay, params)
+        try {
+            windowManager?.addView(overlay, params)
+        } catch (_: SecurityException) {
+            overlay = null
+            stopSelf()
+        } catch (_: RuntimeException) {
+            overlay = null
+            stopSelf()
+        }
     }
 
     private fun createChannel() {
@@ -60,7 +98,11 @@ class PetOverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
-        overlay?.let { windowManager?.removeView(it) }
+        try {
+            overlay?.let { windowManager?.removeView(it) }
+        } catch (_: RuntimeException) {
+            // The system may already have removed the overlay during shutdown.
+        }
         overlay = null
         super.onDestroy()
     }
