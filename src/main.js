@@ -1,7 +1,9 @@
-import './styles.css';
 import { LiveCanvasPet } from './livecanvas.js';
 
-const APP_BASE = import.meta.env.BASE_URL || '/';
+// The normal Vite bundle serves `public/` at the app root. The Legacy Pages
+// fallback serves repository files directly, where those same assets live
+// under `public/`.
+const APP_BASE = import.meta.env?.BASE_URL || './public/';
 const asset = (path) => `${APP_BASE}${String(path).replace(/^\/+/, '')}`;
 
 const PROVIDERS = {
@@ -575,7 +577,7 @@ function render() {
   mountLiveCanvas();
   const list = document.querySelector('#message-list');
   if (list) list.scrollTop = list.scrollHeight;
-  if (!swRegistered && 'serviceWorker' in navigator) {
+  if (!swRegistered && import.meta.env?.BASE_URL && 'serviceWorker' in navigator) {
     navigator.serviceWorker.register(asset('sw.js')).then(() => { swRegistered = true; }).catch(() => {});
   }
 }
