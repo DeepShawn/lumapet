@@ -7,6 +7,7 @@ dist/
 *.log
 scratch/
 research/
+generated_images/
 platform/windows/release/
 platform/android/.gradle/
 platform/android/local.properties
