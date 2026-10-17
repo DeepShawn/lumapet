@@ -1,0 +1,84 @@
+name: LumaPet Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx electron-builder --config electron-builder.yml --win nsis portable --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: platform/windows/release/*
+          if-no-files-found: error
+          retention-days: 2
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run android:sync
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.7'
+      - run: gradle -p platform/android assembleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: platform/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 2
+
+  publish:
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-windows
+          path: release-assets/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-android
+          path: release-assets/android
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG_NAME" --repo "$REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" --repo "$REPOSITORY" --title "LumaPet $TAG_NAME" --generate-notes
+          fi
+          gh release upload "$TAG_NAME" release-assets/windows/* release-assets/android/* --repo "$REPOSITORY" --clobber
