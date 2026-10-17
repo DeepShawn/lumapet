@@ -81,4 +81,13 @@ jobs:
           if ! gh release view "$TAG_NAME" --repo "$REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG_NAME" --repo "$REPOSITORY" --title "LumaPet $TAG_NAME" --generate-notes
           fi
-          gh release upload "$TAG_NAME" release-assets/windows/* release-assets/android/* --repo "$REPOSITORY" --clobber
+          assets=()
+          while IFS= read -r -d '' asset; do
+            assets+=("$asset")
+          done < <(find release-assets/windows release-assets/android -mindepth 1 -maxdepth 1 -type f -print0)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release files were found" >&2
+            exit 1
+          fi
+          printf 'Uploading %s release files\n' "${#assets[@]}"
+          gh release upload "$TAG_NAME" "${assets[@]}" --repo "$REPOSITORY" --clobber
