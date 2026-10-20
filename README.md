@@ -1,13 +1,14 @@
 # LumaPet
 
-LumaPet 是一个面向 Web、Windows 和 Android 的 AI 桌宠第一版。它把 Cloud GPT 与 DeepSeek 放在同一套对话核心里，并提供两种角色形态（Q 版 / 成年版）、可自定义场景、强调色、大小、对白气泡，以及参考图上传。
+LumaPet 是一个面向 Web、Windows 和 Android 的 AI 桌宠第一版。它把 Cloud GPT、DeepSeek 与 Claude 放在同一套对话核心里，内置 GPT 娘、DeepSeek 娘、Claude 娘和像素小螃蟹 Clawd 四个角色，并提供两种角色形态（Q 版 / 成年版；Clawd 为小只 / 大只）、可自定义场景、强调色、大小、对白气泡，以及参考图上传。
 
 ## 当前版本
 
 - **Web/PWA**：响应式工作台，支持浏览器直接运行和安装为 PWA。
 - **Windows**：Electron 浮窗壳，默认置顶，关闭窗口后收进托盘。
 - **Android**：原生 WebView + 悬浮服务骨架，获得悬浮窗权限后，应用退到后台仍保留桌宠入口。
-- **模型**：Cloud GPT 与 DeepSeek，均支持 OpenAI 兼容的 `chat/completions` 接口。
+- **模型**：Cloud GPT 与 DeepSeek 走 OpenAI 兼容的 `chat/completions` 接口；Claude 通过官方 `@anthropic-ai/sdk` 调用 Anthropic Messages API（默认 `claude-opus-5-5`，低 effort，启用服务端 refusal fallback）。
+- **角色**：四个角色都由 Canvas 实时绘制（不再裁切参考图），带呼吸、眨眼、视线跟随、口型、点击弹跳；Clawd 是 Claude Code 的像素吉祥物，思考时头顶会转出 Claude Code 风格的 ✻，说话时会走路挥手。
 - **API 代理**：内置无依赖 Node 服务，可把 API Key 放在服务器环境变量里，设备只收到模型回复。
 - **Live2D 插槽**：可在参考图面板导入本地 `.model3.json` / `.model.json` 清单，记录动作、表情和许可证元数据；不会自动上传或内置来源不明的模型。
 - **LiveCanvas 动画层**：内置呼吸、眨眼、视线跟随、口型、粒子和点击反应；后续可将同一状态协议替换成真正的 Live2D runtime。
@@ -35,6 +36,7 @@ npm run preview
 ```bash
 LUMAPET_CLOUDGPT_API_KEY=你的密钥 \\
 LUMAPET_DEEPSEEK_API_KEY=你的密钥 \\
+LUMAPET_CLAUDE_API_KEY=你的密钥 \\
 npm start
 ```
 
@@ -44,7 +46,7 @@ npm start
 
 ## 配置模型
 
-点击右上角设置，选择 Cloud GPT 或 DeepSeek，填写模型名、兼容接口地址和 API Key。设备直连模式会把 Key 写入当前设备的 `localStorage`，前端直接请求你填写的接口；没有 Key 时会自动使用本地演示回复。需要集中管理密钥时切换到服务端代理模式，并在 Node 服务环境变量中配置 Key。
+点击右上角设置，选择 Cloud GPT、DeepSeek 或 Claude，填写模型名、接口地址和 API Key（Claude 的接口地址填 API 根地址，如 `https://api.anthropic.com`）。设备直连模式会把 Key 写入当前设备的 `localStorage`，前端直接请求你填写的接口；没有 Key 时会自动使用本地演示回复。需要集中管理密钥时切换到服务端代理模式，并在 Node 服务环境变量中配置 Key。
 
 默认值：
 
@@ -52,6 +54,7 @@ npm start
 | --- | --- | --- |
 | Cloud GPT | `gpt-4o-mini` | `https://api.openai.com/v1/chat/completions` |
 | DeepSeek | `deepseek-chat` | `https://api.deepseek.com/chat/completions` |
+| Claude | `claude-opus-5-5` | `https://api.anthropic.com` |
 
 生产环境建议为 API 请求增加自己的服务端代理、限流和密钥轮换，不要把长期密钥放在共享设备的浏览器里。
 

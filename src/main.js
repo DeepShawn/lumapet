@@ -26,6 +26,16 @@ const PROVIDERS = {
     endpoint: 'https://api.deepseek.com/chat/completions',
     transport: 'direct',
     description: '适合中文对话、推理与代码助手'
+  },
+  claude: {
+    id: 'claude',
+    name: 'Claude',
+    shortName: 'CL',
+    color: '#d97757',
+    model: 'claude-opus-5-5',
+    endpoint: 'https://api.anthropic.com',
+    transport: 'direct',
+    description: 'Anthropic Messages API，适合长文、写作与代码'
   }
 };
 
@@ -38,7 +48,8 @@ const PRESETS = {
     objectAdult: '20% 50%',
     objectChild: '80% 50%',
     emoji: '✦',
-    line: '紫雾龙角与柔光魔法'
+    line: '紫雾龙角与柔光魔法',
+    accent: '#a78bfa'
   },
   deepseek: {
     name: 'DeepSeek 娘',
@@ -48,7 +59,31 @@ const PRESETS = {
     objectAdult: '20% 50%',
     objectChild: '80% 50%',
     emoji: '◈',
-    line: '深海蓝与小小鱼尾'
+    line: '深海蓝与小小鱼尾',
+    accent: '#55a8ff'
+  },
+  claude: {
+    name: 'Claude 娘',
+    eyebrow: 'Claude',
+    adult: asset('references/claude-reference.jpg'),
+    child: asset('references/claude-reference.jpg'),
+    objectAdult: '20% 50%',
+    objectChild: '80% 50%',
+    emoji: '✺',
+    line: '橙发、花饰与一本旧书',
+    accent: '#d97757'
+  },
+  clawd: {
+    name: 'Clawd',
+    eyebrow: 'Claude Code',
+    adult: asset('references/clawd.svg'),
+    child: asset('references/clawd.svg'),
+    objectAdult: '50% 50%',
+    objectChild: '50% 50%',
+    emoji: '▚',
+    line: 'Claude Code 的像素小螃蟹',
+    pixel: true,
+    accent: '#d97757'
   }
 };
 
@@ -173,17 +208,15 @@ function imageForPet() {
   return state.petMode === 'adult' ? currentPreset().adult : currentPreset().child;
 }
 
+function modeLabel() {
+  if (currentPreset().pixel) return state.petMode === 'adult' ? '大只像素形态' : '小只像素形态';
+  return state.petMode === 'adult' ? '成年形态' : 'Q版形态';
+}
+
 function objectPosition() {
   if (state.customImage) return '50% 50%';
   const preset = currentPreset();
   return state.petMode === 'adult' ? preset.objectAdult : preset.objectChild;
-}
-
-function petImageStyle() {
-  if (state.customImage) return 'object-position:50% 50%;';
-  // The supplied visual sheets contain adult and Q版 panels side by side.
-  // Doubling the image width lets the stage show one panel cleanly.
-  return `width:200%;max-width:none;object-fit:cover;object-position:center;transform:translateX(${state.petMode === 'adult' ? '0' : '-50%'});`;
 }
 
 function persistSettings() {
@@ -465,14 +498,14 @@ function render() {
               ${state.bubble && !state.quietMode ? `<div class="pet-bubble"><span>${state.isThinking ? '正在思考…' : state.petMood === '开心' ? '收到啦！' : '今天也要发光'}</span><i></i></div>` : ''}
               <button type="button" class="pet-portrait ${state.motion ? 'float' : ''}" data-action="pet-speak" aria-label="点击 ${esc(preset.name)}">
                 <canvas id="pet-canvas" aria-label="${esc(preset.name)} 动态桌宠"></canvas>
-                <span class="pet-glass"></span><span class="pet-live-badge">LIVE 2D STYLE</span>
+                <span class="pet-glass"></span><span class="pet-live-badge">${preset.pixel ? 'PIXEL' : 'LIVE 2D STYLE'}</span>
               </button>
-              <div class="pet-nameplate"><span class="pet-orb">${esc(preset.emoji)}</span><span><b>${esc(preset.name)}</b><small>${state.petMode === 'adult' ? '成年形态' : 'Q版形态'} · ${esc(preset.line)}</small></span></div>
+              <div class="pet-nameplate"><span class="pet-orb">${esc(preset.emoji)}</span><span><b>${esc(preset.name)}</b><small>${esc(modeLabel())} · ${esc(preset.line)}</small></span></div>
             </div>
             <div class="pet-card-foot">
               <div class="mode-toggle" role="group" aria-label="形态选择">
-                <button type="button" class="${state.petMode === 'chibi' ? 'active' : ''}" data-mode="chibi" aria-pressed="${state.petMode === 'chibi'}">Q版</button>
-                <button type="button" class="${state.petMode === 'adult' ? 'active' : ''}" data-mode="adult" aria-pressed="${state.petMode === 'adult'}">成年版</button>
+                <button type="button" class="${state.petMode === 'chibi' ? 'active' : ''}" data-mode="chibi" aria-pressed="${state.petMode === 'chibi'}">${preset.pixel ? '小只' : 'Q版'}</button>
+                <button type="button" class="${state.petMode === 'adult' ? 'active' : ''}" data-mode="adult" aria-pressed="${state.petMode === 'adult'}">${preset.pixel ? '大只' : '成年版'}</button>
               </div>
               <label class="mini-select"><span>角色</span><select id="preset-select">${Object.entries(PRESETS).map(([id, item]) => `<option value="${id}" ${id === state.preset ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></label>
             </div>
@@ -536,7 +569,7 @@ function render() {
         </aside>
       </main>
 
-      <footer class="statusbar"><span><i class="status-dot"></i> LumaPet v0.1 · 本地工作区</span><span><button type="button" data-action="open-privacy">隐私说明</button><span class="footer-sep">·</span><span>Cloud GPT + DeepSeek</span></span></footer>
+      <footer class="statusbar"><span><i class="status-dot"></i> LumaPet v0.1 · 本地工作区</span><span><button type="button" data-action="open-privacy">隐私说明</button><span class="footer-sep">·</span><span>Cloud GPT + DeepSeek + Claude</span></span></footer>
     </div>
     <div class="modal-backdrop" id="modal-backdrop" hidden></div>
     <section class="modal" id="settings-modal" hidden role="dialog" aria-modal="true" aria-labelledby="settings-title">
@@ -555,9 +588,9 @@ function render() {
     <section class="modal reference-modal" id="reference-modal" hidden role="dialog" aria-modal="true" aria-labelledby="reference-title">
       <div class="modal-head"><div><span class="eyebrow">REFERENCE STUDIO</span><h3 id="reference-title">角色参考与外观</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
       <div class="reference-preview"><div class="large-reference"><img id="reference-preview-image" src="${esc(state.customImage || imageForPet())}" alt="参考图预览" /></div><div><b>${state.customImage ? '自定义参考图' : esc(preset.name)}</b><p>首版保留参考图，用于角色视觉锚定。后续可接入 Live2D、动作层与生成式换装。</p><label class="upload-button"><input id="reference-upload" type="file" accept="image/png,image/jpeg,image/webp" />上传一张参考图</label>${state.customImage ? '<button type="button" class="text-button" data-action="clear-reference">清除自定义图</button>' : ''}</div></div>
-      <div class="reference-gallery"><span class="eyebrow">内置参考</span><div class="gallery-grid"><button type="button" data-reference="gpt"><img src="${asset('references/gpt-reference.jpg')}" alt="GPT 娘参考" /><span>GPT 娘</span></button><button type="button" data-reference="deepseek"><img src="${asset('references/deepseek-reference.jpg')}" alt="DeepSeek 娘参考" /><span>DeepSeek 娘</span></button><button type="button" data-reference="intro"><img src="${asset('references/intro.jpg')}" alt="灵感板" /><span>灵感板</span></button></div></div>
+      <div class="reference-gallery"><span class="eyebrow">内置参考</span><div class="gallery-grid"><button type="button" data-reference="gpt"><img src="${asset('references/gpt-reference.jpg')}" alt="GPT 娘参考" /><span>GPT 娘</span></button><button type="button" data-reference="deepseek"><img src="${asset('references/deepseek-reference.jpg')}" alt="DeepSeek 娘参考" /><span>DeepSeek 娘</span></button><button type="button" data-reference="claude"><img src="${asset('references/claude-reference.jpg')}" alt="Claude 娘参考" /><span>Claude 娘</span></button><button type="button" data-reference="clawd"><img src="${asset('references/clawd.svg')}" alt="Clawd 像素形象" /><span>Clawd</span></button><button type="button" data-reference="intro"><img src="${asset('references/intro.jpg')}" alt="灵感板" /><span>灵感板</span></button></div></div>
       <div class="live2d-slot"><div><span class="eyebrow">LIVE2D SLOT · EXPERIMENTAL</span><b>${state.live2dModel ? `已载入 ${esc(state.live2dModel.name || '本地模型')}` : '导入本地 Live2D 模型包'}</b><small>${state.live2dModel ? `${esc(state.live2dModel.version || '3')} · ${state.live2dModel.textures || 0} 张纹理 · ${state.live2dModel.motions?.length || 0} 组动作 · ${state.live2dModel.expressions || 0} 个表情` : '选择 .model3.json / .model.json，可附带 manifest.json 与 LICENSE/NOTICE'}</small></div><label class="upload-button"><input id="live2d-upload" type="file" multiple accept=".json,.model3.json,.model.json,.moc3,.moc,.png,.jpg,.jpeg,.webp,.motion3.json,.exp3.json,LICENSE,NOTICE" />${state.live2dModel ? '重新载入' : '选择模型包'}</label>${state.live2dModel ? `<button type="button" class="text-button" data-action="clear-live2d">清除模型清单</button>` : ''}</div>
-      <p class="license-note">模型文件只在本机选择，不会自动上传。缺少许可证时仅作为本地实验资源；鲸鱼娘仓库的模型是 CC BY-NC-SA 4.0，Claude 娘 / GPT 娘目前没有找到可确认可再分发的 Live2D 模型。</p>
+      <p class="license-note">模型文件只在本机选择，不会自动上传。缺少许可证时仅作为本地实验资源；鲸鱼娘仓库的模型是 CC BY-NC-SA 4.0，Claude 娘 / GPT 娘目前没有找到可确认可再分发的 Live2D 模型，所以内置角色都由 Canvas 原创绘制。</p>
     </section>
     <section class="modal agent-modal" id="agent-modal" hidden role="dialog" aria-modal="true" aria-labelledby="agent-title">
       <div class="modal-head"><div><span class="eyebrow">LOCAL TASK BRIDGE</span><h3 id="agent-title">本机任务代理</h3></div><button type="button" class="close-button" data-action="close-modal" aria-label="关闭">×</button></div>
@@ -585,23 +618,29 @@ function render() {
 function renderOverlay() {
   document.body.classList.add('overlay-mode');
   const preset = currentPreset();
-  app.innerHTML = `<div class="overlay-shell" style="--accent:${esc(state.accent)}"><div class="overlay-bubble ${state.quietMode ? 'hidden' : ''}">${state.isThinking ? '正在思考…' : state.petMood === '开心' ? '收到啦！' : '点击我聊天'}</div><button type="button" class="pet-portrait ${state.motion ? 'float' : ''}" data-action="pet-speak" aria-label="点击 ${esc(preset.name)}"><canvas id="pet-canvas" aria-label="${esc(preset.name)} 动态桌宠"></canvas><span class="pet-glass"></span><span class="pet-live-badge">LUMAPET</span></button><span class="overlay-caption">${esc(preset.name)} · ${state.petMode === 'adult' ? '成年版' : 'Q版'}</span></div><div id="toast" class="toast" role="status"></div>`;
+  app.innerHTML = `<div class="overlay-shell" style="--accent:${esc(state.accent)}"><div class="overlay-bubble ${state.quietMode ? 'hidden' : ''}">${state.isThinking ? '正在思考…' : state.petMood === '开心' ? '收到啦！' : '点击我聊天'}</div><button type="button" class="pet-portrait ${state.motion ? 'float' : ''}" data-action="pet-speak" aria-label="点击 ${esc(preset.name)}"><canvas id="pet-canvas" aria-label="${esc(preset.name)} 动态桌宠"></canvas><span class="pet-glass"></span><span class="pet-live-badge">LUMAPET</span></button><span class="overlay-caption">${esc(preset.name)} · ${esc(modeLabel())}</span></div><div id="toast" class="toast" role="status"></div>`;
   bindEvents();
   mountLiveCanvas();
 }
 
 function mountLiveCanvas() {
-  liveCanvasPet?.destroy();
   const canvas = document.querySelector('#pet-canvas');
-  if (!canvas) return;
-  liveCanvasPet = new LiveCanvasPet(canvas, {
+  if (!canvas) { liveCanvasPet?.destroy(); liveCanvasPet = null; return; }
+  const options = {
     kind: state.preset,
     mode: state.petMode,
     accent: state.accent,
     motion: state.motion,
     state: state.isThinking ? 'thinking' : state.petMood === '开心' ? 'speaking' : 'idle',
     mood: state.petMood
-  });
+  };
+  // Keep one pet alive across re-renders so its animation does not restart.
+  if (liveCanvasPet) {
+    liveCanvasPet.setOptions(options);
+    liveCanvasPet.attach(canvas);
+  } else {
+    liveCanvasPet = new LiveCanvasPet(canvas, options);
+  }
   liveCanvasPet.start();
 }
 
@@ -641,6 +680,15 @@ function setProvider(id) {
   persistSettings();
   render();
   toast(`${PROVIDERS[id].name} 已切换`);
+}
+
+function selectPreset(id, rerender = true) {
+  if (!isPreset(id)) return;
+  state.preset = id;
+  state.customImage = '';
+  state.accent = PRESETS[id].accent || state.accent;
+  persistSettings();
+  if (rerender) render();
 }
 
 function petSpeak() {
@@ -728,15 +776,22 @@ async function sendChat(fromClipboard = false) {
     return;
   }
   let timeout;
+  const controller = new AbortController();
   try {
-    const controller = new AbortController();
-    timeout = window.setTimeout(() => controller.abort(), 30000);
+    timeout = window.setTimeout(() => controller.abort(), 60000);
+    const systemPrompt = `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。当前情绪：${state.emotion.mood}，能量 ${Math.round(state.emotion.energy)}，亲密度 ${Math.round(state.emotion.affection)}。`;
+    const history = state.messages.slice(-12).map(({ role, content }) => ({ role, content }));
+    if (state.provider === 'claude' && !useProxy) {
+      // Loaded on demand: keeps the SDK out of the first paint, and the
+      // unbundled legacy Pages build still boots without resolving it.
+      const { claudeChat } = await import('./claude-chat.js');
+      const content = await claudeChat({ apiKey: key, baseURL: config.endpoint, model: config.model, system: systemPrompt, messages: history, browser: true, signal: controller.signal });
+      state.messages.push({ role: 'assistant', content });
+      return;
+    }
     const requestBody = {
       model: config.model,
-      messages: [
-          { role: 'system', content: `你是 LumaPet，一只友好的 AI 桌宠。回答简洁、清楚，偶尔带一点轻松的陪伴感。当前角色：${currentPreset().name}。当前情绪：${state.emotion.mood}，能量 ${Math.round(state.emotion.energy)}，亲密度 ${Math.round(state.emotion.affection)}。` },
-        ...state.messages.slice(-12).map(({ role, content }) => ({ role, content }))
-      ],
+      messages: [{ role: 'system', content: systemPrompt }, ...history],
       temperature: 0.7
     };
     if (useProxy) requestBody.provider = state.provider;
@@ -752,7 +807,7 @@ async function sendChat(fromClipboard = false) {
     if (!content) throw new Error('接口没有返回可读内容');
     state.messages.push({ role: 'assistant', content: String(content) });
   } catch (error) {
-    state.messages.push({ role: 'assistant', content: `这次连接没有成功：${error.name === 'AbortError' ? '请求超时' : error.message}\n\n你可以检查 API Key、接口地址或网络连接；也可以先清空 Key 使用演示模式。` });
+    state.messages.push({ role: 'assistant', content: `这次连接没有成功：${error.name === 'AbortError' || controller.signal.aborted ? '请求超时' : error.message}\n\n你可以检查 API Key、接口地址或网络连接；也可以先清空 Key 使用演示模式。` });
   } finally {
     window.clearTimeout(timeout);
     state.isThinking = false;
@@ -784,7 +839,7 @@ function bindEvents() {
     if (action === 'screenshot') toast('窗口捕捉已预留给 Windows / Android 壳');
     if (action === 'clear-reference') { state.customImage = ''; persistSettings(); closeModal(); render(); toast('已恢复内置参考图'); }
   }));
-  document.querySelector('#preset-select')?.addEventListener('change', (event) => { state.preset = event.target.value; state.customImage = ''; persistSettings(); render(); });
+  document.querySelector('#preset-select')?.addEventListener('change', (event) => selectPreset(event.target.value));
   document.querySelector('#provider-select')?.addEventListener('change', (event) => setProvider(event.target.value));
   document.querySelector('#size-range')?.addEventListener('input', (event) => { state.size = Number(event.target.value); persistSettings(); document.querySelector('.app-shell')?.style.setProperty('--pet-scale', state.size); document.querySelector('.pet-portrait')?.style.setProperty('transform', `scale(${state.size})`); });
   document.querySelector('#accent-input')?.addEventListener('input', (event) => { state.accent = event.target.value; persistSettings(); document.querySelector('.app-shell')?.style.setProperty('--accent', state.accent); });
@@ -853,8 +908,7 @@ function bindEvents() {
   });
   document.querySelectorAll('[data-reference]').forEach((button) => button.addEventListener('click', () => {
     if (PRESETS[button.dataset.reference]) {
-      state.preset = button.dataset.reference;
-      state.customImage = '';
+      selectPreset(button.dataset.reference, false);
     } else if (button.dataset.reference === 'intro') {
       state.customImage = asset('references/intro.jpg');
     }
