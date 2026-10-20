@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { claudeChat, CLAUDE_DEFAULT_BASE_URL, CLAUDE_DEFAULT_MODEL } from '../src/claude-chat.js';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const dist = join(root, 'dist');
@@ -26,6 +27,11 @@ const providers = {
     endpoint: process.env.LUMAPET_DEEPSEEK_ENDPOINT || 'https://api.deepseek.com/chat/completions',
     model: process.env.LUMAPET_DEEPSEEK_MODEL || 'deepseek-chat',
     key: process.env.LUMAPET_DEEPSEEK_API_KEY || ''
+  },
+  claude: {
+    endpoint: process.env.LUMAPET_CLAUDE_BASE_URL || CLAUDE_DEFAULT_BASE_URL,
+    model: process.env.LUMAPET_CLAUDE_MODEL || CLAUDE_DEFAULT_MODEL,
+    key: process.env.LUMAPET_CLAUDE_API_KEY || ''
   }
 };
 
@@ -58,16 +64,27 @@ async function proxyChat(req, res) {
   try {
     if (proxyToken && req.headers['x-lumapet-proxy-token'] !== proxyToken) return json(res, 401, { error: { message: '代理访问令牌无效' } });
     const payload = await body(req);
-    const providerId = payload.provider === 'deepseek' ? 'deepseek' : 'cloudgpt';
+    const providerId = Object.hasOwn(providers, payload.provider) ? payload.provider : 'cloudgpt';
     const provider = providers[providerId];
     const key = provider.key;
     if (!key) return json(res, 503, { error: { message: `${providerId} 的服务端 API Key 尚未配置` } });
+    const messages = Array.isArray(payload.messages) ? payload.messages.slice(-20) : [];
+    if (providerId === 'claude') {
+      // Reply in the OpenAI-style shape the app already reads for proxy mode.
+      const system = messages.filter((message) => message?.role === 'system').map((message) => String(message.content)).join('\n');
+      try {
+        const content = await claudeChat({ apiKey: key, baseURL: provider.endpoint, model: payload.model || provider.model, system: system || undefined, messages });
+        return json(res, 200, { choices: [{ message: { role: 'assistant', content } }] });
+      } catch (error) {
+        return json(res, typeof error.status === 'number' ? error.status : 502, { error: { message: error.message } });
+      }
+    }
     const response = await fetch(provider.endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model: payload.model || provider.model,
-        messages: Array.isArray(payload.messages) ? payload.messages.slice(-20) : [],
+        messages,
         temperature: typeof payload.temperature === 'number' ? payload.temperature : 0.7,
         stream: false
       })

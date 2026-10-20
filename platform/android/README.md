@@ -1,11 +1,14 @@
-# Android 悬浮桌宠壳
+# Android 桌宠壳
 
-Web 核心通过 `?platform=android` 进入 Android 版窄屏布局。`app/src/main/java/com/lumapet/` 中的 `MainActivity` 和 `PetOverlayService` 负责：
+`MainActivity` 用 WebView 加载共享的 Web 核心（`?platform=android`），App 内是一张手机桌面：桌宠在屏幕上活动，窗口变成底部弹出的面板。
 
-- 首次启动时申请 `SYSTEM_ALERT_WINDOW` 悬浮窗权限；
-- 进入后台后保持一个轻量的 LumaPet 悬浮气泡；
-- 通过前台服务保证系统不会立即回收桌宠。
+在开始菜单里点「放到手机桌面」：
 
-构建前先在仓库根目录执行 `npm run android:sync`，它会构建 Web 核心并把 `dist/` 同步到 `app/src/main/assets/public/`，然后使用 Android Studio 打开 `platform/android`。设备需要 Android 8.0+。
+1. 如果还没有「显示在其他应用上层」权限，会跳到系统设置页，授权后再点一次；
+2. `PetOverlayService` 以前台服务启动，在其他应用上层开一个小的透明 WebView 窗口（`?platform=android&overlay=1`）；
+3. 页面在整块屏幕的坐标里模拟桌宠，每一帧通过 `LumaAndroid.moveTo()` 让小窗口跟着桌宠走；
+4. 在悬浮桌宠上双击或长按回到 App，点通知也能回去。
 
-这是首版的原生能力骨架，后续可以在 `PetOverlayService` 里加入拖拽、点击唤起、OpenClaw 工具菜单和 Live2D 渲染。
+悬浮窗和 App 共享同一份本地存储，所以角色和亲密度是同步的。
+
+构建前在仓库根目录执行 `npm run android:sync`，它会构建 Web 核心并复制到 `app/src/main/assets/public/`，然后用 Android Studio 打开 `platform/android`。需要 Android 8.0+。

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 
-// GitHub Pages serves the site from /<repo>/ while local and server builds use /.
-const base = process.env.VITE_BASE || (process.env.GITHUB_ACTIONS ? '/lumapet/' : '/');
+// Relative asset paths work everywhere LumaPet is served from: GitHub Pages
+// project subpaths, the Node server, and file:// in the Electron and Android
+// shells. VITE_BASE can still force an absolute base.
+const base = process.env.VITE_BASE || './';
 
 export default defineConfig({ base });
