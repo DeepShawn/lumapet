@@ -43,12 +43,14 @@ const DEFAULT_SETTINGS = {
   agentUrl: 'http://127.0.0.1:8788',
   agentToken: '',
   customImage: '',
-  onboarded: false
+  onboarded: false,
+  // Set once the user changes the lineup, so default migrations leave it alone.
+  petsEdited: false
 };
 
 function cleanSettings(raw) {
   const value = { ...DEFAULT_SETTINGS, ...(raw && typeof raw === 'object' ? raw : {}) };
-  for (const key of ['quiet', 'chatter', 'follow', 'sound', 'wallpaperMotion', 'bubbles', 'onboarded']) value[key] = Boolean(value[key]);
+  for (const key of ['quiet', 'chatter', 'follow', 'sound', 'wallpaperMotion', 'bubbles', 'onboarded', 'petsEdited']) value[key] = Boolean(value[key]);
   value.scale = Math.min(1.6, Math.max(.6, Number(value.scale) || 1));
   if (!PROVIDER_IDS.includes(value.provider)) value.provider = 'claude';
   if (typeof value.accent !== 'string' || (value.accent && !/^#[0-9a-f]{6}$/i.test(value.accent))) value.accent = '';
@@ -63,7 +65,14 @@ function cleanPets(raw) {
     .filter((pet) => pet && CHARACTER_IDS.includes(pet.kind))
     .slice(0, 4)
     .map((pet) => ({ kind: pet.kind, mode: pet.mode === 'adult' ? 'adult' : 'chibi', affection: Math.min(100, Math.max(0, Number(pet.affection) || 0)) }));
-  return pets.length ? pets : [{ kind: 'clawd', mode: 'chibi', affection: 0 }, { kind: 'claude', mode: 'chibi', affection: 0 }];
+  return pets.length ? pets : [{ kind: 'clawd', mode: 'chibi', affection: 0 }];
+}
+
+// v0.2.0 started everyone with Clawd + Claude 娘 and saved it automatically.
+// The default is now Clawd alone; move untouched old defaults over to it.
+function migratePets(pets, settings) {
+  const oldDefault = pets.length === 2 && pets[0].kind === 'clawd' && pets[1].kind === 'claude' && pets.every((pet) => pet.mode === 'chibi');
+  return oldDefault && !settings.petsEdited ? pets.slice(0, 1) : pets;
 }
 
 function cleanMessages(raw) {
@@ -77,7 +86,7 @@ export const store = {
   settings: cleanSettings(read(KEYS.settings, {})),
   providers: read(KEYS.providers, {}),
   messages: cleanMessages(read(KEYS.messages, [])),
-  pets: cleanPets(read(KEYS.pets, null)),
+  pets: null,
 
   saveSettings() { write(KEYS.settings, this.settings); },
   saveProviders() { write(KEYS.providers, this.providers); },
@@ -103,7 +112,7 @@ export const store = {
     if (!payload || typeof payload !== 'object') throw new Error('配置文件格式不正确');
     const { proxyToken, agentToken, customImage } = this.settings;
     this.settings = cleanSettings({ ...payload.settings, proxyToken, agentToken, customImage });
-    if (payload.pets) this.pets = cleanPets(payload.pets);
+    if (payload.pets) { this.pets = cleanPets(payload.pets); this.settings.petsEdited = true; }
     for (const [id, config] of Object.entries(payload.providers || {})) {
       if (!PROVIDER_IDS.includes(id) || !config || typeof config !== 'object') continue;
       this.providers[id] = { ...(this.providers[id] || {}), model: String(config.model || ''), endpoint: String(config.endpoint || ''), transport: config.transport === 'proxy' ? 'proxy' : 'direct' };
@@ -113,3 +122,5 @@ export const store = {
     this.saveProviders();
   }
 };
+
+store.pets = migratePets(cleanPets(read(KEYS.pets, null)), store.settings);

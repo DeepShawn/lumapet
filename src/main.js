@@ -98,6 +98,7 @@ const app = {
     if (world.pets.length >= 4 || !CHARACTERS[kind]) return null;
     const pet = world.addPet({ kind, mode, scale: store.settings.scale, image: kind === 'custom' ? app.customImage : null, x: 140 + Math.random() * Math.max(100, world.bounds.right - 280) });
     if (!silent) window.setTimeout(() => pet.say(line(kind, 'greet')), 900);
+    store.set({ petsEdited: true });
     syncPets();
     return pet;
   },
@@ -107,6 +108,7 @@ const app = {
     const pet = world.pets.find((item) => item.id === id);
     if (!pet) return;
     pet.say('拜拜～', 900);
+    store.set({ petsEdited: true });
     window.setTimeout(() => { bubbles.remove(pet); world.removePet(id); syncPets(); app.refreshApps(); }, 700);
   },
 
@@ -115,6 +117,7 @@ const app = {
     if (!pet) return;
     pet.setLook(mode);
     if (pet.onFloor()) pet.hop(-520);
+    store.set({ petsEdited: true });
     syncPets();
   },
 
