@@ -19,6 +19,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.app.NotificationCompat
@@ -74,7 +75,20 @@ class PetOverlayService : Service() {
             setBackgroundColor(Color.TRANSPARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                // A dead renderer must not crash the app; drop the floating pet instead.
+                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                    try {
+                        windowManager?.removeView(view)
+                    } catch (_: RuntimeException) {
+                        // Already detached.
+                    }
+                    view.destroy()
+                    if (webView === view) webView = null
+                    stopSelf()
+                    return true
+                }
+            }
             addJavascriptInterface(OverlayBridge(), "LumaAndroid")
             loadUrl("file:///android_asset/public/index.html?platform=android&overlay=1")
         }

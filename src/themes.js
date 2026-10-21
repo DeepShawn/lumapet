@@ -75,7 +75,8 @@ export function applyTheme(id, root = document.documentElement, accentOverride =
 }
 
 export class Wallpaper {
-  constructor(canvas) {
+  constructor(canvas, { maxRatio = 1.5 } = {}) {
+    this.maxRatio = maxRatio;
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.themeId = 'aurora';
@@ -94,7 +95,8 @@ export class Wallpaper {
   }
 
   resize() {
-    const ratio = Math.min(1.5, window.devicePixelRatio || 1);
+    const ratio = Math.min(this.maxRatio, window.devicePixelRatio || 1);
+    this.ratio = ratio;
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.canvas.width = Math.round(this.width * ratio);
@@ -114,6 +116,7 @@ export class Wallpaper {
 
   paint(t) {
     const theme = THEMES[this.themeId];
+    this.scratch.ratio = this.ratio;
     theme.paint(this.ctx, this.width, this.height, t, this.scratch);
   }
 }
@@ -134,7 +137,7 @@ function stars(ctx, w, h, t, s, count = 140, maxY = 1) {
 // per theme/resize at device resolution, then blitted every frame.
 function layer(s, key, w, h, draw) {
   if (!s[key]) {
-    const ratio = Math.min(1.5, window.devicePixelRatio || 1);
+    const ratio = s.ratio || 1;
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(w * ratio);
     canvas.height = Math.round(h * ratio);

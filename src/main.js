@@ -36,7 +36,12 @@ const petCtx = petCanvas.getContext('2d');
 const world = new World();
 if (import.meta.env?.DEV || new URL(location.href).searchParams.has("debug")) window.__world = world;
 const wm = new WindowManager($('#win-layer'));
-const wallpaper = platform === 'web' || platform === 'android' ? new Wallpaper($('#wallpaper')) : null;
+// Android WebViews render in software; keep canvases at 1x there, and in
+// lite mode (after a renderer crash) keep the wallpaper still.
+const lite = params.get('lite') === '1';
+const maxRatio = platform === 'android' || platform === 'overlay' ? 1 : 2;
+if (lite) document.body.classList.add('lite');
+const wallpaper = platform === 'web' || platform === 'android' ? new Wallpaper($('#wallpaper'), { maxRatio: Math.min(1.5, maxRatio) }) : null;
 
 // Overlay mode: this page is a small floating window; it follows the pet.
 const overlay = { x: 0, y: 0, w: 0, h: 0, sentX: NaN, sentY: NaN };
@@ -76,7 +81,7 @@ const app = {
   applySettings() {
     const s = store.settings;
     applyTheme(s.theme, document.documentElement, s.accent);
-    if (wallpaper) wallpaper.animated = s.wallpaperMotion && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (wallpaper) wallpaper.animated = s.wallpaperMotion && !lite && !matchMedia('(prefers-reduced-motion: reduce)').matches;
     world.options.quiet = s.quiet || app.focus.endsAt > Date.now();
     world.options.chatter = s.chatter;
     world.options.follow = s.follow;
@@ -320,7 +325,7 @@ function taskbarHeight() {
 }
 
 function resize() {
-  const ratio = Math.min(2, window.devicePixelRatio || 1);
+  const ratio = Math.min(maxRatio, window.devicePixelRatio || 1);
   petCanvas.width = Math.round(window.innerWidth * ratio);
   petCanvas.height = Math.round(window.innerHeight * ratio);
   petCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
