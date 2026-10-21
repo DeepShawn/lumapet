@@ -1,6 +1,6 @@
 {
   "name": "lumapet",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "main": "platform/windows/main.cjs",
   "description": "LumaPet — a cross-platform AI desktop companion that roams your desktop, for Claude, Cloud GPT and DeepSeek.",
